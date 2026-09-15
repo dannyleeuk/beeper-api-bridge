@@ -38,10 +38,21 @@ Both answer `GET /healthz`.
 ## Requirements
 
 - A Beeper account with self-hosted bridges enabled (`bbctl` logged in).
-- Python 3.9+ and PyYAML (`apt install python3-yaml` or `pip install pyyaml`).
+- Python 3.9+ and PyYAML (installed in step 0 below).
 - Somewhere always-on to run it: a small VPS or a LAN box. Only outbound connectivity to Beeper is required.
 
 ## Setup
+
+0. **Get the code** and the one dependency. Either clone the repo or grab a release archive from the Releases page:
+
+   ```sh
+   sudo apt install python3 python3-yaml           # Debian/Ubuntu; elsewhere: pip install pyyaml
+   git clone https://github.com/dannyleeuk/beeper-api-bridge.git
+   cd beeper-api-bridge
+   ```
+
+   The systemd units in `contrib/` expect the files under `/opt/beeper-api-bridge` owned by a `bridge` user; running from
+   your home directory works just as well for trying it out. Update later with `git pull` and a restart.
 
 1. **Register the appservice** with Beeper (once). The name becomes the bridge's identity on your account:
 
