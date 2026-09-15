@@ -34,7 +34,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import yaml
 
-__version__ = "1.1.0-beta.1"
+__version__ = "1.1.0-beta.2"
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.environ.get("BEEPER_API_BRIDGE_CONFIG", os.path.join(BASE, "config.json"))
@@ -287,16 +287,34 @@ class _Handler(BaseHTTPRequestHandler):
 
     # ---- request parsing ------------------------------------------------
     def _parse_params(self) -> dict:
-        """Senders post form-encoded (the API's convention); accept JSON too."""
+        """Senders post form-encoded (the API's convention); accept JSON too. `token` and `user` may also come on the
+        query string (?token=…&user=…) for senders whose body you cannot shape (Grafana's and Uptime Kuma's stock
+        webhooks). Uptime Kuma's webhook body (msg / monitor / heartbeat) is mapped onto message / title."""
         raw = self._read_body()
         ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip()
+        params = {}
         if ctype == "application/json":
             try:
-                return json.loads(raw or b"{}")
+                params = json.loads(raw or b"{}")
             except ValueError:
-                return {}
-        parsed = urllib.parse.parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True)
-        return {k: v[0] for k, v in parsed.items()}
+                params = {}
+            if not isinstance(params, dict):
+                params = {}
+        else:
+            parsed = urllib.parse.parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True)
+            params = {k: v[0] for k, v in parsed.items()}
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        for k in ("token", "user", "title", "priority"):
+            if k in qs and not params.get(k):
+                params[k] = qs[k][0]
+        if not params.get("message") and params.get("msg"):            # Uptime Kuma webhook shape
+            mon = params.get("monitor") or {}
+            hb = params.get("heartbeat") or {}
+            name = mon.get("name") if isinstance(mon, dict) else None
+            status = {0: "🔴 Down", 1: "✅ Up", 2: "⏸ Paused", 3: "🟡 Maintenance"}.get(hb.get("status") if isinstance(hb, dict) else None, "")
+            params["message"] = str(params["msg"])
+            params.setdefault("title", " ".join(x for x in ("Uptime Kuma:", name, status) if x))
+        return params
 
     # ---- routing --------------------------------------------------------
     def do_GET(self):

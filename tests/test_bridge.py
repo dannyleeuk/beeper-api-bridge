@@ -98,6 +98,26 @@ class BridgeTest(unittest.TestCase):
         content = [c for c in self.matrix.calls if "/send/" in c[1]][0][2]
         self.assertIn("<b>bold</b>", content["formatted_body"])
 
+    def test_query_string_credentials_and_kuma_webhook_shape(self):
+        self.matrix.calls.clear()
+        req = urllib.request.Request(self.url + f"/1/messages.json?token={TOKEN}&user={USER}",
+                                     data=json.dumps({"msg": "[Web] [🔴 Down] timeout", "monitor": {"name": "Web"}, "heartbeat": {"status": 0}}).encode(),
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req) as r:
+            self.assertEqual(json.loads(r.read())["status"], 1)
+        content = [c for c in self.matrix.calls if "/send/" in c[1]][0][2]
+        self.assertTrue(content["body"].startswith("Uptime Kuma: Web 🔴 Down\n[Web] [🔴 Down] timeout"))
+
+    def test_grafana_stock_webhook_shape(self):
+        self.matrix.calls.clear()
+        req = urllib.request.Request(self.url + f"/1/messages.json?token={TOKEN}&user={USER}",
+                                     data=json.dumps({"title": "[FIRING:1] Disk full", "message": "/ is at 95%", "state": "alerting"}).encode(),
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req) as r:
+            self.assertEqual(json.loads(r.read())["status"], 1)
+        content = [c for c in self.matrix.calls if "/send/" in c[1]][0][2]
+        self.assertEqual(content["body"], "[FIRING:1] Disk full\n/ is at 95%")
+
     def test_blank_message_refused(self):
         status, body = self.post("/1/messages.json", {"token": TOKEN, "user": USER, "message": ""})
         self.assertEqual(body["errors"], ["message cannot be blank"])
