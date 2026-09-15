@@ -34,7 +34,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import yaml
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.environ.get("PUSHOVER_BRIDGE_CONFIG", os.path.join(BASE, "config.json"))
@@ -51,6 +51,15 @@ def _slug(value: str) -> str:
     return slug[:48] or "app"
 
 
+def _prefix_from_registration(reg: dict) -> str:
+    """'@sh-apibridge_.+:example' -> 'sh-apibridge'."""
+    for ns in (reg.get("namespaces") or {}).get("users") or []:
+        m = re.match(r"^@?\\?([A-Za-z0-9.=\-]+)_", str(ns.get("regex", "")))
+        if m:
+            return m.group(1)
+    return ""
+
+
 class Config:
     def __init__(self, path: str):
         with open(path) as fh:
@@ -62,6 +71,10 @@ class Config:
         self.as_token: str = reg["as_token"]
         self.hs_token: str = reg["hs_token"]
         self.bot_localpart: str = reg["sender_localpart"]
+        # Ghost users must live in the user namespace Beeper granted this bridge, which bbctl derives from the name you
+        # registered: `bbctl register sh-apibridge` -> regex '@sh-apibridge_.+:…' -> ghosts @sh-apibridge_<app>. Read it
+        # from the registration so the name is yours to choose; "ghost_prefix" in config.json overrides.
+        self.ghost_prefix: str = raw.get("ghost_prefix") or _prefix_from_registration(reg) or self.bot_localpart.removesuffix("bot")
 
         self.homeserver: str = raw["homeserver"].rstrip("/")
         self.domain: str = raw["domain"]
@@ -151,8 +164,8 @@ class Matrix:
         return mxid
 
     def ensure_room(self, token: str, app: dict) -> tuple:
-        name = app.get("name", "Pushover")
-        ghost = self.ensure_ghost(f"sh-pushover_{_slug(name)}", name)
+        name = app.get("name", "Notifications")
+        ghost = self.ensure_ghost(f"{self.cfg.ghost_prefix}_{_slug(name)}", name)
 
         # an application with "own_room": true keeps its own chat even in single-room mode (mute the noisy ones)
         room_id = (self.cfg.single_room if not app.get("own_room") else None) or self._state["rooms"].get(token)
@@ -164,15 +177,15 @@ class Matrix:
             "POST", "/_matrix/client/v3/createRoom",
             {
                 "name": name,
-                "topic": f"Pushover notifications from {name} (via sh-pushover)",
+                "topic": f"Notifications from {name}",
                 "invite": [self.cfg.owner],
                 "is_direct": True,
                 "initial_state": [{
                     "type": "m.bridge",
-                    "state_key": f"pushover://{_slug(name)}",
+                    "state_key": f"notify://{_slug(name)}",
                     "content": {
                         "bridgebot": self.cfg.bot,
-                        "protocol": {"id": "pushover", "displayname": "Pushover"},
+                        "protocol": {"id": "notifications", "displayname": "Notifications"},
                         "channel": {"id": _slug(name), "displayname": name},
                     },
                 }],
@@ -212,7 +225,7 @@ class Matrix:
     def send_notification(self, token: str, app: dict, msg: dict) -> str:
         room_id, ghost = self.ensure_room(token, app)
 
-        title = msg.get("title") or app.get("name", "Pushover")
+        title = msg.get("title") or app.get("name", "Notification")
         text = msg.get("message", "")
         priority = msg.get("priority", 0)
         url = msg.get("url")

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 — 2026-09-15
+- Ghost user prefix is read from the registration's user namespace (whatever name you gave `bbctl register`) instead of
+  being hard-coded; `ghost_prefix` in config.json overrides. Room topic and bridge metadata no longer say "Pushover".
+
 ## 1.0.0 — 2026-09-14
 First public release.
 - Pushover-compatible `/1/messages.json` and `/1/users/validate.json`, form-encoded or JSON.

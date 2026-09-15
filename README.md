@@ -46,10 +46,11 @@ Both answer `GET /healthz`.
 
    ```sh
    bbctl login
-   bbctl register -o registration.yaml sh-pushover
+   bbctl register -o registration.yaml sh-apibridge
    ```
 
-   Without `--address`, Beeper expects the bridge to come to it over a websocket — that is what `bbctl proxy` does, and it
+   The name you register becomes the bridge's user namespace (`@sh-apibridge_<app>` ghosts and the `sh-apibridgebot`
+   bot); the bridge reads it from the registration file, so pick any name. Without `--address`, Beeper expects the bridge to come to it over a websocket — that is what `bbctl proxy` does, and it
    forwards events to the `url:` in the registration file. Make sure that line reads `url: http://127.0.0.1:29337`
    (the appservice listener below); edit it if bbctl wrote something else. `bbctl register` also prints your homeserver
    URL and server name for `config.json`. Keep `registration.yaml` private (`chmod 600`): it holds the appservice tokens.
@@ -69,6 +70,7 @@ Both answer `GET /healthz`.
    | `user_key` | the value senders must pass as Pushover's `user` — make one up: `python3 -c "import secrets; print('u'+secrets.token_urlsafe(22))"` |
    | `applications` | map of application token → `{"name": "…"}`; mint tokens the same way (`'a'+…`) |
    | `single_room` | optional room ID: post everything into this one chat (see *Rooms*) |
+   | `ghost_prefix` | optional; normally derived from the registration's user namespace |
    | `appservice_bind` / `appservice_port`, `pushover_bind` / `pushover_port` | listeners; defaults are loopback |
    | `state_file` | where room IDs and ghost users are remembered (default `state.json` next to the script) |
 

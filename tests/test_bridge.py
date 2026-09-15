@@ -39,7 +39,7 @@ class BridgeTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
         reg = os.path.join(cls.tmp.name, "registration.yaml")
-        open(reg, "w").write("as_token: as\nhs_token: hs\nsender_localpart: sh-pushoverbot\n")
+        open(reg, "w").write("as_token: as\nhs_token: hs\nsender_localpart: sh-apibridgebot\nnamespaces:\n  users:\n    - regex: '@sh-apibridge_.+:example'\n      exclusive: true\n")
         cfgp = os.path.join(cls.tmp.name, "config.json")
         json.dump({"registration_file": reg, "homeserver": "http://hs.invalid", "domain": "example", "owner": "@me:example",
                    "state_file": os.path.join(cls.tmp.name, "state.json"), "pushover_port": 0, "appservice_port": 0,
@@ -88,7 +88,7 @@ class BridgeTest(unittest.TestCase):
         content = sends[0][2]
         self.assertEqual(content["body"], "[HIGH]\nDisk\n91% full\nhttps://x.example/d")
         self.assertIn("<strong>[HIGH] Disk</strong>", content["formatted_body"])
-        self.assertEqual(sends[0][3], "@sh-pushover_uptime-kuma:example")           # posted as the application's ghost
+        self.assertEqual(sends[0][3], "@sh-apibridge_uptime-kuma:example")          # ghost prefix comes from the registration namespace
         self.assertTrue(any(c[1].endswith("/join") and c[3] == "@me:example" for c in self.matrix.calls))  # owner joined
 
     def test_json_body_and_html_flag(self):
@@ -105,3 +105,10 @@ class BridgeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PrefixTest(unittest.TestCase):
+    def test_prefix_from_namespace_regex(self):
+        self.assertEqual(pb._prefix_from_registration({"namespaces": {"users": [{"regex": "@sh-apibridge_.+:beeper\\.local"}]}}), "sh-apibridge")
+        self.assertEqual(pb._prefix_from_registration({"namespaces": {"users": [{"regex": "@sh-pushover_.+:beeper\\.local"}]}}), "sh-pushover")
+        self.assertEqual(pb._prefix_from_registration({}), "")
