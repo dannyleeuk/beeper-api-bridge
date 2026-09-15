@@ -41,7 +41,29 @@ Both answer `GET /healthz`.
 - Python 3.9+ and PyYAML (installed in step 0 below).
 - Somewhere always-on to run it: a small VPS or a LAN box. Only outbound connectivity to Beeper is required.
 
-## Setup
+## Quick install (Debian / Ubuntu)
+
+The installer does everything in the manual steps below: prerequisites, bbctl if you don't have it, the bridge under
+`/opt/beeper-api-bridge`, the Beeper registration, `config.json` with freshly minted tokens, two systemd units and a test
+notification. Re-run it later to **update**, **add an application** or **show the tokens**.
+
+```sh
+sudo apt install -y curl
+bash <(curl -fsSL https://raw.githubusercontent.com/dannyleeuk/beeper-api-bridge/main/install.sh)
+```
+
+Prefer to read it first: `curl -fsSLO https://raw.githubusercontent.com/dannyleeuk/beeper-api-bridge/main/install.sh`,
+then `sudo bash install.sh`. Options: `--no-systemd` (you run the two processes yourself, e.g. in tmux; the script prints
+the commands), `--user NAME`, `--dir DIR`, `--ref main` (development branch), `--update`, `--yes`.
+
+**Already running bbctl?** If the user you `sudo` from has a bbctl login (`~/.config/bbctl`), the installer offers to run
+the bridge as that user and reuse the login, so there is no second `bbctl login`. bbctl and the bridge do not need to share
+a directory, only a host and a user: bbctl is one binary (the installer looks on `PATH`, `~/bbctl/`, `~/.local/bin`, and
+otherwise downloads the latest release to `/usr/local/bin`), and its login lives in that user's `~/.config/bbctl`. The
+`bbctl proxy` for this bridge is separate from any `bbctl run …` sessions you already have; it can run in its own tmux
+window just as well as under systemd.
+
+## Manual setup
 
 0. **Get the code** and the one dependency. Either clone the repo or grab a release archive from the Releases page:
 
@@ -112,12 +134,79 @@ Both answer `GET /healthz`.
 
 Change only the base URL; the request format is exactly Pushover's. Supported parameters: `token`, `user`, `message`, `title`,
 `priority` (-2…2), `url`, `url_title`, `html`. Form-encoded (what real Pushover clients send) and JSON bodies are accepted.
+`token` and `user` (and `title`, `priority`) may also be given on the **query string**, for senders whose body you cannot
+shape: `http://bridge:29338/1/messages.json?token=<token>&user=<user_key>`. Tools that refuse a custom Pushover host (some
+only accept `api.pushover.net`) need a webhook / HTTP action instead — every recipe below uses one.
 
-- **Grafana**: contact point type *Webhook* is easier than the Pushover type here, because Grafana's Pushover contact point
-  has the API host hard-coded. POST JSON `{"token":…,"user":…,"title":…,"message":…}` to `/1/messages.json`.
-- **Uptime Kuma**, **Proxmox**, **CrowdSec** (`notification-http` plugin), **Home Assistant** (`rest_command`) and most
-  tools with a Pushover or generic webhook target work by changing the URL.
-- Tools that refuse a custom Pushover host (some only accept `api.pushover.net`) need a webhook / HTTP action instead.
+In the recipes, `BRIDGE` is the address the api listener is bound to (see *Reaching it from other machines*), `TOKEN` the
+application's token and `USER` the user key from `config.json`.
+
+### Uptime Kuma
+Settings → Notifications → *Setup Notification* → type **Webhook**:
+- Post URL: `http://BRIDGE:29338/1/messages.json?token=TOKEN&user=USER`
+- Request Body: *Preset - application/json*
+
+That's all: the bridge understands Kuma's own webhook body and posts "Uptime Kuma: *monitor* 🔴 Down / ✅ Up" with Kuma's
+message. (Kuma's built-in *Pushover* type cannot be pointed at another host.)
+
+### Grafana (unified alerting)
+Alerting → Contact points → *Add contact point* → integration **Webhook**:
+- URL: `http://BRIDGE:29338/1/messages.json?token=TOKEN&user=USER`
+- HTTP method: POST. Leave the payload as the default: Grafana's webhook JSON already carries `title` and `message`.
+
+For nicer text, set *Title* and *Message* on the contact point (Optional Webhook settings) — they are what appears in Beeper.
+Grafana's *Pushover* integration has the API host hard-coded, so use Webhook.
+
+### Proxmox VE / Proxmox Backup Server
+Datacenter (or Configuration) → Notifications → *Notification Targets* → Add → **Webhook**:
+- Method: POST, URL: `http://BRIDGE:29338/1/messages.json?token=TOKEN&user=USER`
+- Header: `Content-Type: application/json`
+- Body:
+  ```
+  {"title": "{{ title }}", "message": "{{ escape message }}", "priority": {{#if (eq severity "error")}}1{{else}}0{{/if}}}
+  ```
+  If your version rejects the `#if` helper, use `"priority": 0`. Then add a *Notification Matcher* that routes to this target.
+
+### CrowdSec
+`/etc/crowdsec/notifications/http.yaml` (the `http` plugin):
+```yaml
+type: http
+name: http_default
+log_level: info
+url: http://BRIDGE:29338/1/messages.json
+method: POST
+headers: {"Content-Type": "application/json"}
+format: |
+  {"token": "TOKEN", "user": "USER", "title": "CrowdSec: ban", "priority": 1,
+   "message": "{{ range . }}{{ .Source.Scope }} {{ .Source.Value }}{{ if .Source.Cn }} ({{ .Source.Cn }}){{ end }} - {{ .Scenario }}\n{{ end }}"}
+group_wait: 60s
+group_threshold: 10
+```
+Then add `http_default` under `notifications:` in `profiles.yaml` and `systemctl reload crowdsec`. Test with
+`cscli notifications test http_default`.
+
+### Home Assistant
+`configuration.yaml`:
+```yaml
+rest_command:
+  beeper_notify:
+    url: http://BRIDGE:29338/1/messages.json
+    method: POST
+    content_type: application/x-www-form-urlencoded
+    payload: "token=TOKEN&user=USER&title={{ title | urlencode }}&message={{ message | urlencode }}"
+```
+Call `rest_command.beeper_notify` from an automation with `title` and `message` fields.
+
+### Shell, cron, anything
+```sh
+curl -sS -X POST http://BRIDGE:29338/1/messages.json \
+  --data-urlencode "token=TOKEN" --data-urlencode "user=USER" \
+  --data-urlencode "title=Backup finished" --data-urlencode "message=$(hostname): 12.3 GB in 4m" --data-urlencode "priority=0"
+```
+Python: `urllib.request.urlopen("http://BRIDGE:29338/1/messages.json", urllib.parse.urlencode({...}).encode())`.
+
+### Anything with a Pushover integration that allows a custom host
+Set the host/base URL to `http://BRIDGE:29338` and fill in token and user key as usual.
 
 ### Reaching it from other machines
 

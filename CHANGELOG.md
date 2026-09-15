@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0-beta.2 — 2026-09-15
+- `install.sh`: one-line installer/updater for Debian/Ubuntu (reuses an existing bbctl login, `--no-systemd` for tmux users).
+- `token`/`user` accepted on the query string; Uptime Kuma's stock webhook body is understood (title from the monitor and status).
+- README: recipes for Uptime Kuma, Grafana, Proxmox VE/PBS, CrowdSec, Home Assistant and curl.
+
 ## 1.1.0-beta.1 — 2026-09-15
 First public pre-release (beta: one homelab has run it for a few weeks; expect rough edges).
 Renamed to **beeper-api-bridge**. It is its own thing that happens to speak Pushover's API, and the old name suggested

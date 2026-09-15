@@ -208,9 +208,9 @@ esac
 say "Checking the Beeper login for user '$SVC_USER' (bbctl keeps it in $SVC_HOME/.config/bbctl)"
 if ! as_user "$BBCTL" whoami >/dev/null 2>&1; then
   echo "Not logged in. bbctl will ask for your Beeper e-mail and the code it sends you."
-  [ -t 0 ] || [ -e /dev/tty ] || die "bbctl login is interactive; run this installer in a terminal"
   mkdir -p "$SVC_HOME/.config"; chown "$SVC_USER" "$SVC_HOME/.config"
-  as_user "$BBCTL" login </dev/tty || die "bbctl login failed"
+  if { exec 3</dev/tty; } 2>/dev/null; then as_user "$BBCTL" login <&3 || die "bbctl login failed"; exec 3<&-
+  else as_user "$BBCTL" login || die "bbctl login failed (needs an interactive terminal)"; fi
 fi
 ME=$(as_user "$BBCTL" whoami 2>/dev/null | awk -F': ' '/^User ID:/ {print $2}')
 say "Beeper account: ${ME:-unknown}"
