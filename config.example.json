@@ -1,0 +1,21 @@
+{
+  "registration_file": "registration.yaml",
+  "homeserver": "https://matrix.beeper.com",
+  "domain": "beeper.local",
+  "owner": "@you:beeper.local",
+  "state_file": "state.json",
+
+  "appservice_bind": "127.0.0.1",
+  "appservice_port": 29337,
+  "pushover_bind": "127.0.0.1",
+  "pushover_port": 29338,
+
+  "user_key": "uREPLACE-WITH-30-RANDOM-CHARACTERS",
+  "applications": {
+    "aREPLACE-TOKEN-FOR-UPTIME-KUMA": {"name": "Uptime Kuma"},
+    "aREPLACE-TOKEN-FOR-GRAFANA": {"name": "Grafana"},
+    "aREPLACE-TOKEN-FOR-SCRIPTS": {"name": "Scripts", "own_room": true}
+  },
+
+  "single_room": ""
+}

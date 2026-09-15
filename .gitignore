@@ -1,0 +1,7 @@
+# secrets and runtime state — never commit
+config.json
+registration.yaml
+state.json
+state.json.tmp
+__pycache__/
+*.pyc

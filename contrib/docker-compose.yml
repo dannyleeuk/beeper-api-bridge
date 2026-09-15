@@ -1,0 +1,16 @@
+# Bridge + bbctl proxy sharing one network namespace, so the proxy reaches the loopback appservice listener.
+# Put config.json, registration.yaml (and an empty state.json) in ./data, mode 600.
+services:
+  bridge:
+    build: ..
+    volumes: ["./data:/data"]
+    restart: unless-stopped
+    # publish only on a private/VPN address, never 0.0.0.0 on a public host:
+    ports: ["10.0.0.5:29338:29338"]
+  proxy:
+    image: ghcr.io/beeper/bridge-manager:latest
+    command: ["proxy", "-r", "/data/registration.yaml"]
+    volumes: ["./data:/data"]
+    network_mode: "service:bridge"
+    depends_on: [bridge]
+    restart: unless-stopped
