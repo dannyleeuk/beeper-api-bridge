@@ -55,7 +55,7 @@ ask()  { # ask VAR "prompt" "default"
   printf -v "$var" '%s' "${_r:-$def}"
 }
 as_user() { sudo -u "$SVC_USER" env HOME="$SVC_HOME" PATH="$PATH" "$@"; }
-mint()    { python3 -c "import secrets,sys; print(sys.argv[1]+secrets.token_urlsafe(22)[:29])" "$1"; }
+mint()    { python3 -c "import secrets,string,sys; print(sys.argv[1]+''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(29)))" "$1"; }   # 30 chars, letters+digits, like the format some senders validate
 
 # ---- preflight --------------------------------------------------------------------------------------------------
 [ "$(id -u)" = 0 ] || die "run as root (sudo bash install.sh)"
@@ -246,8 +246,9 @@ c = {"registration_file": os.path.join(d, "registration.yaml"), "homeserver": hs
      "state_file": os.path.join(d, "state.json"),
      "appservice_bind": "127.0.0.1", "appservice_port": int(asport), "api_bind": bind, "api_port": int(aport),
      "user_key": ukey, "applications": {}, "single_room": ""}
+import string
 for name in [a.strip() for a in apps.split(",") if a.strip()]:
-    c["applications"]["a" + secrets.token_urlsafe(22)[:29]] = {"name": name}
+    c["applications"]["a" + "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(29))] = {"name": name}
 p = os.path.join(d, "config.json"); open(p, "w").write(json.dumps(c, indent=2) + "\n"); os.chmod(p, 0o600)
 PY
 rm -f "$DIR/.register-meta.json"

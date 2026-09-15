@@ -10,11 +10,11 @@
   "api_bind": "127.0.0.1",
   "api_port": 29338,
 
-  "user_key": "uREPLACE-WITH-30-RANDOM-CHARACTERS",
+  "user_key": "uXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
   "applications": {
-    "aREPLACE-TOKEN-FOR-UPTIME-KUMA": {"name": "Uptime Kuma"},
-    "aREPLACE-TOKEN-FOR-GRAFANA": {"name": "Grafana"},
-    "aREPLACE-TOKEN-FOR-SCRIPTS": {"name": "Scripts", "own_room": true}
+    "aXXXXXXXXXXXXXXXXXXXXXXXXXXXX1": {"name": "Uptime Kuma"},
+    "aXXXXXXXXXXXXXXXXXXXXXXXXXXXX2": {"name": "Grafana"},
+    "aXXXXXXXXXXXXXXXXXXXXXXXXXXXX3": {"name": "Scripts", "own_room": true}
   },
 
   "single_room": ""

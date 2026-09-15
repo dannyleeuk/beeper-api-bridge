@@ -101,8 +101,8 @@ window just as well as under systemd.
    | `homeserver` | your Beeper homeserver URL as printed by `bbctl` (e.g. `https://matrix.beeper.com`) |
    | `domain` | the Matrix server name for your account (e.g. `beeper.local`) |
    | `owner` | your own Matrix ID, the user the ghosts will chat with |
-   | `user_key` | the value senders must pass as `user` — make one up: `python3 -c "import secrets; print('u'+secrets.token_urlsafe(22))"` |
-   | `applications` | map of application token → `{"name": "…"}`; mint tokens the same way (`'a'+…`) |
+   | `user_key` | the value senders must pass as `user`. Any secret string works; the example shape (`u` + 29 letters/digits) matches Pushover's, which some senders validate before sending. Mint one: `python3 -c "import secrets,string; print('u'+''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(29)))"` |
+   | `applications` | map of application token → `{"name": "…"}`; mint tokens the same way with `'a'` (the `X`s in the example are placeholders) |
    | `single_room` | optional room ID: post everything into this one chat (see *Rooms*) |
    | `ghost_prefix` | optional; normally derived from the registration's user namespace |
    | `appservice_bind` / `appservice_port`, `api_bind` / `api_port` | listeners; defaults are loopback |
