@@ -7,8 +7,8 @@
 
   "appservice_bind": "127.0.0.1",
   "appservice_port": 29337,
-  "pushover_bind": "127.0.0.1",
-  "pushover_port": 29338,
+  "api_bind": "127.0.0.1",
+  "api_port": 29338,
 
   "user_key": "uREPLACE-WITH-30-RANDOM-CHARACTERS",
   "applications": {

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0 — 2026-09-15
+Renamed to **beeper-api-bridge**. It is its own thing that happens to speak Pushover's API, and the old name suggested
+otherwise. Script `beeper_api_bridge.py`, env `BEEPER_API_BRIDGE_CONFIG` / `_LOGLEVEL`, config keys `api_bind` / `api_port`
+(the old `pushover_*` keys are still read), systemd units `beeper-api-bridge*.service`. No wire-protocol change.
+
 ## 1.0.1 — 2026-09-15
 - Ghost user prefix is read from the registration's user namespace (whatever name you gave `bbctl register`) instead of
   being hard-coded; `ghost_prefix` in config.json overrides. Room topic and bridge metadata no longer say "Pushover".

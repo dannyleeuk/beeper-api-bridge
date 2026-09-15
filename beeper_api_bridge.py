@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-sh-pushover: a Pushover-API-compatible Matrix appservice for Beeper.
+beeper-api-bridge: a notification API for Beeper, run as a self-hosted Matrix appservice.
 
-Point anything that can send Pushover notifications (Grafana, Uptime Kuma, Proxmox, CrowdSec, scripts...) at this
-instead of api.pushover.net and the messages land in your Beeper chats. No Pushover account involved.
+It speaks the same HTTP API as Pushover, so anything that can send Pushover notifications (Grafana, Uptime Kuma, Proxmox,
+CrowdSec, scripts...) can be pointed at this instead and the messages land in your Beeper chats. It never talks to
+Pushover and needs no account there; the compatibility is only so existing senders work unchanged.
 
 Two listeners, deliberately separate:
 
   * appservice listener  - loopback only, receives transactions pushed by
     `bbctl proxy`. Never bind this anywhere but 127.0.0.1.
-  * pushover listener    - speaks enough of the Pushover HTTP API to be a
-    drop-in for api.pushover.net. This is the one senders talk to, so its
-    bind address is configurable.
+  * api listener         - the Pushover-compatible endpoint senders talk to
+    (POST /1/messages.json), so its bind address is configurable.
 
 One Beeper chat per Pushover application token; each chat is owned by its own
 ghost user so notifications arrive from "Uptime Kuma" rather than from you.
@@ -34,14 +34,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import yaml
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.environ.get("PUSHOVER_BRIDGE_CONFIG", os.path.join(BASE, "config.json"))
+CONFIG_PATH = os.environ.get("BEEPER_API_BRIDGE_CONFIG", os.path.join(BASE, "config.json"))
 
-log = logging.getLogger("sh-pushover")
+log = logging.getLogger("beeper-api-bridge")
 
-# Pushover priority -> human label. -2/-1 are quieter than normal, 1/2 louder.
+# Priority (Pushover scale) -> human label. -2/-1 are quieter than normal, 1/2 louder.
 PRIORITY_LABEL = {-2: "lowest", -1: "low", 0: None, 1: "HIGH", 2: "EMERGENCY"}
 
 
@@ -81,9 +81,9 @@ class Config:
         self.owner: str = raw["owner"]
 
         self.as_bind = (raw.get("appservice_bind", "127.0.0.1"), int(raw.get("appservice_port", 29337)))
-        self.api_bind = (raw.get("pushover_bind", "127.0.0.1"), int(raw.get("pushover_port", 29338)))
+        self.api_bind = (raw.get("api_bind", raw.get("pushover_bind", "127.0.0.1")), int(raw.get("api_port", raw.get("pushover_port", 29338))))
 
-        # user key senders must present, mirroring Pushover's `user` parameter
+        # user key senders must present (the API's `user` parameter)
         self.user_key: str = raw["user_key"]
         # token -> {"name": ..., "avatar": optional mxc://}
         self.apps: dict = raw["applications"]
@@ -238,7 +238,7 @@ class Matrix:
         if url:
             plain.append(url)
 
-        # msg["html"]=1 means the sender supplied Pushover-flavoured HTML
+        # msg["html"]=1 means the sender supplied (Pushover-style) HTML
         body_html = text if msg.get("html") else html.escape(text)
         parts = [f"<strong>{html.escape(title)}</strong>"]
         if label:
@@ -267,7 +267,7 @@ class _Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     cfg: Config = None
     matrix: Matrix = None
-    role: str = "pushover"
+    role: str = "api"
 
     def log_message(self, fmt, *args):
         log.debug("%s - %s", self.address_string(), fmt % args)
@@ -286,7 +286,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     # ---- request parsing ------------------------------------------------
     def _parse_params(self) -> dict:
-        """Pushover clients post form-encoded; accept JSON too."""
+        """Pushover-style clients post form-encoded; accept JSON too."""
         raw = self._read_body()
         ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip()
         if ctype == "application/json":
@@ -321,7 +321,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
-        if self.role != "pushover":
+        if self.role != "api":
             return self._reply(404, {"errcode": "M_NOT_FOUND"})
         if path == "/1/messages.json":
             return self._handle_message()
@@ -340,7 +340,7 @@ class _Handler(BaseHTTPRequestHandler):
             return True
         return None
 
-    # ---- pushover API ----------------------------------------------------
+    # ---- notification API (Pushover-compatible) ----------------------------
     def _pushover_error(self, errors):
         self._reply(400, {"status": 0, "errors": errors, "request": uuid.uuid4().hex})
 
@@ -399,14 +399,14 @@ def _serve(bind, role, cfg, matrix):
 
 def main(argv=None):
     import argparse
-    ap = argparse.ArgumentParser(prog="pushover_bridge", description="Pushover-compatible notification API bridged into Beeper (Matrix).")
-    ap.add_argument("-c", "--config", default=CONFIG_PATH, help="config.json path (default: $PUSHOVER_BRIDGE_CONFIG or next to the script)")
+    ap = argparse.ArgumentParser(prog="beeper_api_bridge", description="beeper-api-bridge: a Pushover-compatible notification API that delivers into Beeper (Matrix).")
+    ap.add_argument("-c", "--config", default=CONFIG_PATH, help="config.json path (default: $BEEPER_API_BRIDGE_CONFIG or next to the script)")
     ap.add_argument("--check", action="store_true", help="load the config, authenticate to the homeserver, then exit")
-    ap.add_argument("--version", action="version", version=f"sh-pushover {__version__}")
+    ap.add_argument("--version", action="version", version=f"beeper-api-bridge {__version__}")
     args = ap.parse_args(argv)
 
     logging.basicConfig(
-        level=os.environ.get("PUSHOVER_BRIDGE_LOGLEVEL", "INFO"),
+        level=os.environ.get("BEEPER_API_BRIDGE_LOGLEVEL", "INFO"),
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
     )
     try:
@@ -422,12 +422,12 @@ def main(argv=None):
         return 1
     log.info("authenticated as %s", body.get("user_id"))
     if args.check:
-        log.info("config OK: %d application token(s), pushover listener %s:%d", len(cfg.apps), *cfg.api_bind)
+        log.info("config OK: %d application token(s), api listener %s:%d", len(cfg.apps), *cfg.api_bind)
         return 0
 
     _serve(cfg.as_bind, "appservice", cfg, matrix)
-    _serve(cfg.api_bind, "pushover", cfg, matrix)
-    log.info("sh-pushover %s ready; %d application token(s) configured", __version__, len(cfg.apps))
+    _serve(cfg.api_bind, "api", cfg, matrix)
+    log.info("beeper-api-bridge %s ready; %d application token(s) configured", __version__, len(cfg.apps))
     try:
         while True:
             time.sleep(3600)

@@ -1,6 +1,6 @@
-# /etc/systemd/system/sh-pushover-bridge.service — the Python appservice. Adjust User/paths.
+# /etc/systemd/system/beeper-api-bridge.service — the Python appservice. Adjust User/paths.
 [Unit]
-Description=sh-pushover: Pushover-compatible API bridged into Beeper
+Description=beeper-api-bridge: Pushover-compatible notification API delivered into Beeper
 Documentation=https://github.com/beeper/bridge-manager
 After=network-online.target
 Wants=network-online.target
@@ -10,9 +10,9 @@ StartLimitIntervalSec=0
 Type=simple
 User=bridge
 Group=bridge
-WorkingDirectory=/opt/sh-pushover
-Environment=HOME=/opt/sh-pushover
-ExecStart=/usr/bin/python3 /opt/sh-pushover/pushover_bridge.py --config /opt/sh-pushover/config.json
+WorkingDirectory=/opt/beeper-api-bridge
+Environment=HOME=/opt/beeper-api-bridge
+ExecStart=/usr/bin/python3 /opt/beeper-api-bridge/beeper_api_bridge.py --config /opt/beeper-api-bridge/config.json
 Restart=always
 RestartSec=15
 TimeoutStopSec=30

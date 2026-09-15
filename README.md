@@ -1,20 +1,21 @@
-# sh-pushover — Pushover notifications, delivered to Beeper
+# beeper-api-bridge — a notification API for Beeper
 
-A tiny, dependency-light [Matrix appservice](https://spec.matrix.org/latest/application-service-api/) that speaks the
-[Pushover](https://pushover.net/api) message API. Point anything that can already send Pushover notifications at it
-instead of `api.pushover.net`, and the messages arrive in your **Beeper** chats.
+A tiny, dependency-light [Matrix appservice](https://spec.matrix.org/latest/application-service-api/) that gives your
+**Beeper** account an HTTP notification endpoint. It speaks the same API as [Pushover](https://pushover.net/api), so
+anything that can already send Pushover notifications can be pointed at it instead of `api.pushover.net`, and the
+messages arrive in your Beeper chats. It is its own bridge, not a Pushover client: nothing here talks to Pushover.
 
 Almost every self-hosted tool has a Pushover integration built in — Grafana, Uptime Kuma, Proxmox VE / Backup Server,
 CrowdSec, Home Assistant, Gotify-style scripts, plain `curl` — so you get chat notifications for all of them without
 writing an adapter for each. No Pushover account, subscription or licence is involved: the tokens are minted by you.
 
 ```
-Grafana / Uptime Kuma / Proxmox / cron …  ──POST /1/messages.json──▶  sh-pushover  ──▶  Beeper (Matrix)
+Grafana / Uptime Kuma / Proxmox / cron …  ──POST /1/messages.json──▶  beeper-api-bridge  ──▶  Beeper (Matrix)
 ```
 
 - One chat per application token, each posting as its own ghost user, so a message shows as coming from "Uptime Kuma"
   rather than from you. Or set `single_room` and everything lands in one chat (still labelled per sender).
-- Pushover priorities become a `[low]` / `[HIGH]` / `[EMERGENCY]` prefix; `url` / `url_title` become a link; `html=1` is honoured.
+- Priorities (-2…2, the Pushover scale) become a `[low]` / `[HIGH]` / `[EMERGENCY]` prefix; `url` / `url_title` become a link; `html=1` is honoured.
 - Unknown tokens and bad user keys are refused with Pushover's own `{"status":0,"errors":[…]}` shape, so senders
   surface the error normally.
 - Single Python file. Standard library plus PyYAML (to read the registration file bbctl writes).
@@ -25,12 +26,12 @@ Beeper lets you run your own bridges through [`bbctl`](https://github.com/beeper
 `bbctl register` creates an appservice registration on your Beeper account; `bbctl proxy` keeps an outbound websocket
 open to Beeper and forwards appservice traffic to a local HTTP listener — no inbound port, no public hostname needed.
 
-sh-pushover runs two listeners, deliberately separate:
+beeper-api-bridge runs two listeners, deliberately separate:
 
 | Listener | Default bind | Purpose |
 |---|---|---|
 | appservice | `127.0.0.1:29337` | receives transactions from `bbctl proxy` — **keep it on loopback** |
-| pushover | `127.0.0.1:29338` | `POST /1/messages.json`, `POST /1/users/validate.json` — the one senders talk to |
+| api | `127.0.0.1:29338` | `POST /1/messages.json`, `POST /1/users/validate.json` — the one senders talk to |
 
 Both answer `GET /healthz`.
 
@@ -67,18 +68,18 @@ Both answer `GET /healthz`.
    | `homeserver` | your Beeper homeserver URL as printed by `bbctl` (e.g. `https://matrix.beeper.com`) |
    | `domain` | the Matrix server name for your account (e.g. `beeper.local`) |
    | `owner` | your own Matrix ID, the user the ghosts will chat with |
-   | `user_key` | the value senders must pass as Pushover's `user` — make one up: `python3 -c "import secrets; print('u'+secrets.token_urlsafe(22))"` |
+   | `user_key` | the value senders must pass as `user` — make one up: `python3 -c "import secrets; print('u'+secrets.token_urlsafe(22))"` |
    | `applications` | map of application token → `{"name": "…"}`; mint tokens the same way (`'a'+…`) |
    | `single_room` | optional room ID: post everything into this one chat (see *Rooms*) |
    | `ghost_prefix` | optional; normally derived from the registration's user namespace |
-   | `appservice_bind` / `appservice_port`, `pushover_bind` / `pushover_port` | listeners; defaults are loopback |
+   | `appservice_bind` / `appservice_port`, `api_bind` / `api_port` | listeners; defaults are loopback |
    | `state_file` | where room IDs and ghost users are remembered (default `state.json` next to the script) |
 
 3. **Start the bridge, then the proxy** (see `contrib/` for systemd units that do this in the right order):
 
    ```sh
-   python3 pushover_bridge.py --check      # loads config, authenticates to Beeper, exits
-   python3 pushover_bridge.py              # foreground
+   python3 beeper_api_bridge.py --check    # loads config, authenticates to Beeper, exits
+   python3 beeper_api_bridge.py            # foreground
    bbctl proxy -r registration.yaml        # in another shell / unit
    ```
 
@@ -98,7 +99,7 @@ Both answer `GET /healthz`.
 
 ## Pointing senders at it
 
-Change only the base URL; everything else is stock Pushover. Supported parameters: `token`, `user`, `message`, `title`,
+Change only the base URL; the request format is exactly Pushover's. Supported parameters: `token`, `user`, `message`, `title`,
 `priority` (-2…2), `url`, `url_title`, `html`. Form-encoded (what real Pushover clients send) and JSON bodies are accepted.
 
 - **Grafana**: contact point type *Webhook* is easier than the Pushover type here, because Grafana's Pushover contact point
@@ -110,7 +111,7 @@ Change only the base URL; everything else is stock Pushover. Supported parameter
 ### Reaching it from other machines
 
 Both listeners are loopback-bound by default; nothing needs an inbound firewall rule. To accept notifications from
-elsewhere, set `pushover_bind` to a VPN or tunnel interface address rather than `0.0.0.0`, or put it behind a reverse
+elsewhere, set `api_bind` to a VPN or tunnel interface address rather than `0.0.0.0`, or put it behind a reverse
 proxy that adds authentication (a Cloudflare Access service token, Tailscale, WireGuard…). The application token and
 user key are the only credentials the API checks, and they travel in clear text unless the transport is encrypted.
 
@@ -125,8 +126,8 @@ user key are the only credentials the API checks, and they travel in clear text 
 ## Operations
 
 - `--check` validates the config and the homeserver login without serving.
-- `PUSHOVER_BRIDGE_LOGLEVEL=DEBUG` logs every request.
-- `contrib/sh-pushover-bridge.service` and `contrib/sh-pushover-proxy.service`: hardened systemd units; the proxy is
+- `BEEPER_API_BRIDGE_LOGLEVEL=DEBUG` logs every request; `BEEPER_API_BRIDGE_CONFIG` points at the config (or use `--config`).
+- `contrib/beeper-api-bridge.service` and `contrib/beeper-api-bridge-proxy.service`: hardened systemd units; the proxy is
   `BindsTo=` the bridge and waits for its `/healthz`, so the pair always comes up in the right order.
 - `Dockerfile` builds a minimal image; mount `config.json`, `registration.yaml` and a writable `state.json` in `/data`.
 - Rotate a token by changing it in `config.json` and restarting; the room mapping is keyed by token, so also move the
@@ -147,8 +148,8 @@ user key are the only credentials the API checks, and they travel in clear text 
 
 ## Relationship to Pushover
 
-None. This project never contacts pushover.net and needs no Pushover account; it implements the request and response
-shapes of Pushover's public message API so that existing clients work unchanged, the way an S3-compatible object store
+None. beeper-api-bridge never contacts pushover.net and needs no Pushover account; it implements the request and
+response shapes of Pushover's public message API so that existing clients work unchanged, the way an S3-compatible object store
 implements Amazon's API. "Pushover" is a trademark of its owner; it is used here only to describe compatibility. This
 project is not affiliated with, endorsed by or supported by Pushover. If you want push notifications on your phone from
 Pushover's own apps, buy Pushover — it is excellent and this is not a replacement for it.

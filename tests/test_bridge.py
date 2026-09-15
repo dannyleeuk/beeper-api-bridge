@@ -1,4 +1,4 @@
-"""Exercise the Pushover-facing API against a fake Matrix (no network). Run: python3 -m unittest discover -s tests"""
+"""Exercise the notification API against a fake Matrix (no network). Run: python3 -m unittest discover -s tests"""
 import json
 import os
 import sys
@@ -10,7 +10,7 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import pushover_bridge as pb  # noqa: E402
+import beeper_api_bridge as pb  # noqa: E402
 
 USER = "u" + "x" * 29
 TOKEN = "a" + "y" * 29
@@ -42,11 +42,11 @@ class BridgeTest(unittest.TestCase):
         open(reg, "w").write("as_token: as\nhs_token: hs\nsender_localpart: sh-apibridgebot\nnamespaces:\n  users:\n    - regex: '@sh-apibridge_.+:example'\n      exclusive: true\n")
         cfgp = os.path.join(cls.tmp.name, "config.json")
         json.dump({"registration_file": reg, "homeserver": "http://hs.invalid", "domain": "example", "owner": "@me:example",
-                   "state_file": os.path.join(cls.tmp.name, "state.json"), "pushover_port": 0, "appservice_port": 0,
+                   "state_file": os.path.join(cls.tmp.name, "state.json"), "api_port": 0, "appservice_port": 0,
                    "user_key": USER, "applications": {TOKEN: {"name": "Uptime Kuma"}}}, open(cfgp, "w"))
         cls.cfg = pb.Config(cfgp)
         cls.matrix = FakeMatrix(cls.cfg)
-        handler = type("H", (pb._Handler,), {"cfg": cls.cfg, "matrix": cls.matrix, "role": "pushover"})
+        handler = type("H", (pb._Handler,), {"cfg": cls.cfg, "matrix": cls.matrix, "role": "api"})
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.url = f"http://127.0.0.1:{cls.server.server_address[1]}"

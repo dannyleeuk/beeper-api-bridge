@@ -1,21 +1,21 @@
-# /etc/systemd/system/sh-pushover-proxy.service — bbctl's websocket proxy to Beeper. BindsTo the bridge and waits for
+# /etc/systemd/system/beeper-api-bridge-proxy.service — bbctl's websocket proxy to Beeper. BindsTo the bridge and waits for
 # its appservice listener, so the pair always starts in the right order. Adjust User/paths and the bbctl binary.
 [Unit]
-Description=bbctl appservice websocket proxy for sh-pushover
+Description=bbctl appservice websocket proxy for beeper-api-bridge
 Documentation=https://github.com/beeper/bridge-manager
-After=network-online.target sh-pushover-bridge.service
+After=network-online.target beeper-api-bridge.service
 Wants=network-online.target
-BindsTo=sh-pushover-bridge.service
+BindsTo=beeper-api-bridge.service
 StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 User=bridge
 Group=bridge
-WorkingDirectory=/opt/sh-pushover
-Environment=HOME=/opt/sh-pushover
+WorkingDirectory=/opt/beeper-api-bridge
+Environment=HOME=/opt/beeper-api-bridge
 ExecStartPre=/bin/bash -c 'for i in {1..30}; do curl -sf http://127.0.0.1:29337/healthz >/dev/null && exit 0; sleep 1; done; echo "bridge listener never came up" >&2; exit 1'
-ExecStart=/usr/local/bin/bbctl proxy -r /opt/sh-pushover/registration.yaml
+ExecStart=/usr/local/bin/bbctl proxy -r /opt/beeper-api-bridge/registration.yaml
 Restart=always
 RestartSec=30
 TimeoutStopSec=60
