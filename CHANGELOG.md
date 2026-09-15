@@ -1,6 +1,7 @@
 # Changelog
 
-## 1.1.0 — 2026-09-15
+## 1.1.0-beta.1 — 2026-09-15
+First public pre-release (beta: one homelab has run it for a few weeks; expect rough edges).
 Renamed to **beeper-api-bridge**. It is its own thing that happens to speak Pushover's API, and the old name suggested
 otherwise. Script `beeper_api_bridge.py`, env `BEEPER_API_BRIDGE_CONFIG` / `_LOGLEVEL`, config keys `api_bind` / `api_port`
 (the old `pushover_*` keys are still read), systemd units `beeper-api-bridge*.service`. No wire-protocol change.

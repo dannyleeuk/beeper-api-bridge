@@ -34,7 +34,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import yaml
 
-__version__ = "1.1.0"
+__version__ = "1.1.0-beta.1"
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.environ.get("BEEPER_API_BRIDGE_CONFIG", os.path.join(BASE, "config.json"))
