@@ -1,6 +1,6 @@
 # /etc/systemd/system/beeper-api-bridge.service — the Python appservice. Adjust User/paths.
 [Unit]
-Description=beeper-api-bridge: Pushover-compatible notification API delivered into Beeper
+Description=beeper-api-bridge: notification API for Beeper
 Documentation=https://github.com/beeper/bridge-manager
 After=network-online.target
 Wants=network-online.target

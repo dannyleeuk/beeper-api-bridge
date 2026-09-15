@@ -65,7 +65,7 @@ class BridgeTest(unittest.TestCase):
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read())
 
-    def test_rejects_unknown_token_like_pushover(self):
+    def test_rejects_unknown_token_with_api_error_shape(self):
         status, body = self.post("/1/messages.json", {"token": "nope", "user": USER, "message": "x"})
         self.assertEqual((status, body["status"], body["errors"]), (400, 0, ["application token is invalid"]))
 
@@ -110,5 +110,5 @@ if __name__ == "__main__":
 class PrefixTest(unittest.TestCase):
     def test_prefix_from_namespace_regex(self):
         self.assertEqual(pb._prefix_from_registration({"namespaces": {"users": [{"regex": "@sh-apibridge_.+:beeper\\.local"}]}}), "sh-apibridge")
-        self.assertEqual(pb._prefix_from_registration({"namespaces": {"users": [{"regex": "@sh-pushover_.+:beeper\\.local"}]}}), "sh-pushover")
+        self.assertEqual(pb._prefix_from_registration({"namespaces": {"users": [{"regex": "@sh-notify_.+:beeper\\.local"}]}}), "sh-notify")
         self.assertEqual(pb._prefix_from_registration({}), "")

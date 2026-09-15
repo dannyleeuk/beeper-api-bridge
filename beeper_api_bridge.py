@@ -13,8 +13,8 @@ Two listeners, deliberately separate:
   * api listener         - the Pushover-compatible endpoint senders talk to
     (POST /1/messages.json), so its bind address is configurable.
 
-One Beeper chat per Pushover application token; each chat is owned by its own
-ghost user so notifications arrive from "Uptime Kuma" rather than from you.
+One Beeper chat per application token; each chat is owned by its own ghost user
+so notifications arrive from "Uptime Kuma" rather than from you.
 """
 
 import html
@@ -41,7 +41,7 @@ CONFIG_PATH = os.environ.get("BEEPER_API_BRIDGE_CONFIG", os.path.join(BASE, "con
 
 log = logging.getLogger("beeper-api-bridge")
 
-# Priority (Pushover scale) -> human label. -2/-1 are quieter than normal, 1/2 louder.
+# Priority -2..2 -> human label. -2/-1 are quieter than normal, 1/2 louder.
 PRIORITY_LABEL = {-2: "lowest", -1: "low", 0: None, 1: "HIGH", 2: "EMERGENCY"}
 
 
@@ -81,6 +81,7 @@ class Config:
         self.owner: str = raw["owner"]
 
         self.as_bind = (raw.get("appservice_bind", "127.0.0.1"), int(raw.get("appservice_port", 29337)))
+        # (pushover_bind/pushover_port: the 1.0.x names of these keys, still accepted)
         self.api_bind = (raw.get("api_bind", raw.get("pushover_bind", "127.0.0.1")), int(raw.get("api_port", raw.get("pushover_port", 29338))))
 
         # user key senders must present (the API's `user` parameter)
@@ -238,7 +239,7 @@ class Matrix:
         if url:
             plain.append(url)
 
-        # msg["html"]=1 means the sender supplied (Pushover-style) HTML
+        # msg["html"]=1 means the sender supplied HTML
         body_html = text if msg.get("html") else html.escape(text)
         parts = [f"<strong>{html.escape(title)}</strong>"]
         if label:
@@ -286,7 +287,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     # ---- request parsing ------------------------------------------------
     def _parse_params(self) -> dict:
-        """Pushover-style clients post form-encoded; accept JSON too."""
+        """Senders post form-encoded (the API's convention); accept JSON too."""
         raw = self._read_body()
         ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip()
         if ctype == "application/json":
@@ -340,16 +341,17 @@ class _Handler(BaseHTTPRequestHandler):
             return True
         return None
 
-    # ---- notification API (Pushover-compatible) ----------------------------
-    def _pushover_error(self, errors):
+    # ---- notification API ---------------------------------------------------
+    def _api_error(self, errors):
+        """Error reply in the shape senders expect: {"status": 0, "errors": [...], "request": id}."""
         self._reply(400, {"status": 0, "errors": errors, "request": uuid.uuid4().hex})
 
     def _handle_validate(self):
         params = self._parse_params()
         if params.get("token") not in self.cfg.apps:
-            return self._pushover_error(["application token is invalid"])
+            return self._api_error(["application token is invalid"])
         if not secrets.compare_digest(params.get("user", ""), self.cfg.user_key):
-            return self._pushover_error(["user identifier is not a valid user key"])
+            return self._api_error(["user identifier is not a valid user key"])
         self._reply(200, {"status": 1, "request": uuid.uuid4().hex, "devices": ["beeper"]})
 
     def _handle_message(self):
@@ -358,12 +360,12 @@ class _Handler(BaseHTTPRequestHandler):
         app = self.cfg.apps.get(token)
         if app is None:
             log.warning("rejected unknown application token from %s", self.address_string())
-            return self._pushover_error(["application token is invalid"])
+            return self._api_error(["application token is invalid"])
         if not secrets.compare_digest(params.get("user", ""), self.cfg.user_key):
             log.warning("rejected bad user key from %s", self.address_string())
-            return self._pushover_error(["user identifier is not a valid user key"])
+            return self._api_error(["user identifier is not a valid user key"])
         if not params.get("message"):
-            return self._pushover_error(["message cannot be blank"])
+            return self._api_error(["message cannot be blank"])
 
         try:
             priority = int(params.get("priority", 0))
