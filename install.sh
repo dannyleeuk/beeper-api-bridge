@@ -49,10 +49,10 @@ say()  { printf '%s==>%s %s\n' "$c_ok" "$c_0" "$*"; }
 warn() { printf '%s!!%s %s\n' "$c_warn" "$c_0" "$*" >&2; }
 die()  { printf '%sERROR:%s %s\n' "$c_err" "$c_0" "$*" >&2; exit 1; }
 ask()  { # ask VAR "prompt" "default"
-  local var=$1 prompt=$2 def=${3:-} reply
+  local var=$1 prompt=$2 def=${3:-} _r=""
   if [ "$YES" = 1 ]; then printf -v "$var" '%s' "$def"; return; fi
-  read -r -p "$prompt${def:+ [$def]}: " reply </dev/tty 2>/dev/null || read -r reply || true
-  printf -v "$var" '%s' "${reply:-$def}"
+  { read -r -p "$prompt${def:+ [$def]}: " _r </dev/tty; } 2>/dev/null || read -r _r || true
+  printf -v "$var" '%s' "${_r:-$def}"
 }
 as_user() { sudo -u "$SVC_USER" env HOME="$SVC_HOME" PATH="$PATH" "$@"; }
 mint()    { python3 -c "import secrets,sys; print(sys.argv[1]+secrets.token_urlsafe(22)[:29])" "$1"; }
