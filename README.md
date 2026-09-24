@@ -4,6 +4,8 @@ A tiny, dependency-light [Matrix appservice](https://spec.matrix.org/latest/appl
 **Beeper** account an HTTP notification endpoint. It speaks the same API as [Pushover](https://pushover.net/api), so
 anything that can already send Pushover notifications can be pointed at it instead of `api.pushover.net`, and the
 messages arrive in your Beeper chats. It is its own bridge, not a Pushover client: nothing here talks to Pushover.
+It can also accept the incoming-webhook format many tools know from Slack, for senders whose only generic output is
+that; nothing here talks to Slack either.
 
 Almost every self-hosted tool has a Pushover integration built in — Grafana, Uptime Kuma, Proxmox VE / Backup Server,
 CrowdSec, Home Assistant, Gotify-style scripts, plain `curl` — so you get chat notifications for all of them without
@@ -18,6 +20,8 @@ Grafana / Uptime Kuma / Proxmox / cron …  ──POST /1/messages.json──▶
 - Priorities (-2…2, the Pushover scale) become a `[low]` / `[HIGH]` / `[EMERGENCY]` prefix; `url` / `url_title` become a link; `html=1` is honoured.
 - Unknown tokens and bad user keys are refused with Pushover's own `{"status":0,"errors":[…]}` shape, so senders
   surface the error normally.
+- Optional, off unless you configure them: a [text webhook](#text-webhook-slack-compatible) endpoint,
+  [mute rules and quiet hours](#mute-rules-and-quiet-hours), and a [delivery log](#delivery-log).
 - Single Python file. Standard library plus PyYAML (to read the registration file bbctl writes).
 
 ## How it works
@@ -107,6 +111,9 @@ window just as well as under systemd.
    | `ghost_prefix` | optional; normally derived from the registration's user namespace |
    | `appservice_bind` / `appservice_port`, `api_bind` / `api_port` | listeners; defaults are loopback |
    | `state_file` | where room IDs and ghost users are remembered (default `state.json` next to the script) |
+   | `webhook` | optional, default `false`: enable the [text webhook](#text-webhook-slack-compatible) endpoint |
+   | `rules_file` | optional: [mute rules and quiet hours](#mute-rules-and-quiet-hours) (JSON; edits apply without a restart) |
+   | `log_file` / `log_max_entries` | optional: the [delivery log](#delivery-log) and how many entries it keeps (default 5000) |
 
 3. **Start the bridge, then the proxy** (see `contrib/` for systemd units that do this in the right order):
 
@@ -240,9 +247,73 @@ Beeper (like most Matrix clients) **displays the HTML one**; the plain one is th
   as spaces, so every multi-line message arrived as one run-on paragraph.
 - **`html=1`** (Pushover's flag) passes `message` through as HTML: use `<b>`, `<i>`, `<a href>` and `<br/>` yourself;
   newlines are not converted. Only send HTML you control.
-- **Emoji**: send real Unicode emoji (🚨 ✅ ⚠️ 🔧). Slack-style `:shortcodes:` are shown literally, and so is Markdown
-  (`*bold*`, backticks) - neither is interpreted.
+- **Emoji**: send real Unicode emoji (🚨 ✅ ⚠️ 🔧). Through the API, `:shortcodes:` and Markdown (`*bold*`,
+  backticks) are shown literally - neither is interpreted. The [text webhook](#text-webhook-slack-compatible) is the
+  exception: it converts both, because that is the format its senders write.
 - Pushover's other formatting options (`monospace=1`, `sound`, `ttl`…) are accepted and ignored.
+
+## Text webhook (Slack-compatible)
+
+Off unless `"webhook": true` is set. Some tools can only send notifications as a Slack incoming webhook (Prometheus
+Alertmanager's Slack receiver, many CI systems, anything built on a "Slack webhook" option). Point them at:
+
+```
+http://BRIDGE:29338/webhook/<application token>/<user_key>
+```
+
+- The body is the incoming-webhook format: JSON with `text`, optionally `blocks` (header, section, context) and
+  `attachments` (pretext, title and title link, text, fields, footer, fallback), or the same JSON in a form field named
+  `payload`. When `blocks` are present, `text` is treated as the notification fallback and not shown, as senders
+  expect. Colours, icons and user names have no equivalent in a Beeper chat and are ignored.
+- Formatting is converted: `*bold*`, `_italic_`, `~strike~`, `` `code` ``, code blocks, `<url|label>` links, and
+  common `:shortcodes:` become emoji (an unknown shortcode is left as written). A header block, or an attachment's
+  title, becomes the message title; otherwise the application's name is used.
+- There is no priority in that format; add `?priority=-2..2` to the URL if you want one.
+- Replies follow the format too: `200 ok`, `403 invalid_token`, `400 invalid_payload` or `400 no_text`.
+- **The URL contains both secrets** (the application token and the user key the API also checks), so treat it like a
+  password and keep it off public places.
+
+## Mute rules and quiet hours
+
+Off unless `rules_file` points at a JSON file. It applies to both the API and the webhook, is re-read whenever it
+changes (no restart), and **fails open**: a missing, unreadable or invalid file, or a rule with a broken pattern, means
+nothing is muted - a notification is never dropped because of a mistake here. A muted message is still acknowledged
+as a success to its sender, so senders do not retry.
+
+```json
+{
+  "timezone": "Europe/Berlin",
+  "mute": [
+    {"app": "Uptime Kuma", "match": "\\bUp\\b", "reason": "recoveries are noise"},
+    {"app": "Backups", "until": "2026-10-01T09:00", "reason": "migration in progress"}
+  ],
+  "quiet_hours": {"start": "23:00", "end": "07:00", "max_priority": 0}
+}
+```
+
+- A **mute rule** matches when every field it has matches: `app` (the application's name, any case), `match` (a regular
+  expression over the title and message, any case), `max_priority` (the rule only covers messages at or below this;
+  default `0`, so `[HIGH]` still gets through) and `until` (the rule expires then; ISO date/time, in `timezone`).
+- **Quiet hours** mute everything at or below `max_priority` (default `0`) between `start` and `end`, which may span
+  midnight.
+- **Emergencies (priority 2) are never muted** unless a rule or the quiet hours say `"include_emergency": true`.
+- `timezone` is an IANA name; without it the host's local time is used. `reason` is what the delivery log shows.
+
+## Delivery log
+
+Off unless `log_file` is set. Every notification is recorded as one JSON line: when, which application, whether it
+came through the API or the webhook, title, priority, the first 300 characters of the text, and the outcome - `sent`,
+`muted` (with the rule that muted it), `rejected` (unknown token, wrong user key, empty or unreadable body) or `failed`
+(with the error). The file is private (mode 600) and keeps the last `log_max_entries` entries. A log that cannot be
+written is reported once and never stops a notification.
+
+```sh
+python3 beeper_api_bridge.py --log               # the last 50 entries
+python3 beeper_api_bridge.py --log 200 --outcome muted
+python3 beeper_api_bridge.py --log --json        # raw JSON lines, e.g. for jq
+```
+
+`--log` only reads the file; it does not contact Beeper or disturb a running bridge.
 
 ## Operations
 
@@ -291,6 +362,10 @@ response shapes of Pushover's public message API so that existing clients work u
 implements Amazon's API. "Pushover" is a trademark of its owner; it is used here only to describe compatibility. This
 project is not affiliated with, endorsed by or supported by Pushover. If you want push notifications on your phone from
 Pushover's own apps, buy Pushover — it is excellent and this is not a replacement for it.
+
+## Relationship to Slack
+
+None. beeper-api-bridge never contacts slack.com and needs no Slack workspace or app; it implements the request and response shapes of Slack's incoming webhooks so that existing senders work unchanged, the way an S3-compatible object store implements Amazon's API. "Slack" is a trademark of its owner; it is used here only to describe compatibility. This project is not affiliated with, endorsed by or supported by Slack. If you want a workspace for your team's conversations, use Slack itself — this is not a replacement for it.
 
 ## Licence
 

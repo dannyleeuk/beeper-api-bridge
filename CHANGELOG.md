@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.0-beta.1 — 2026-09-24
+Three optional features. **All are off unless you add their keys to `config.json`**; a 1.1 config behaves exactly as
+before, and the Pushover-compatible API is unchanged.
+- **Text webhook** (`"webhook": true`): `POST /webhook/<token>/<user_key>` accepts the incoming-webhook format many
+  tools know from Slack - `text`, `blocks`, `attachments`, or a form field `payload` - and converts its formatting,
+  links and common `:shortcodes:`. For senders whose only generic output is that kind of webhook.
+- **Mute rules and quiet hours** (`"rules_file"`): mute by application, text pattern, priority and expiry; quiet hours
+  that may span midnight. Emergencies always get through unless a rule says otherwise. The file is re-read when it
+  changes, and any problem with it means nothing is muted.
+- **Delivery log** (`"log_file"`): every notification recorded as sent, muted (and by which rule), rejected (and why)
+  or failed; read it with `--log`. Capped, private, and it can never block a notification.
+- `--check` also reports the webhook, rules and log settings.
+- README: the three features, and *Relationship to Slack*.
+
 ## 1.1.0 — 2026-09-24
 First stable 1.1 release: the 1.1.0 betas below, unchanged. The installer installs this by default.
 

@@ -17,5 +17,10 @@
     "aXXXXXXXXXXXXXXXXXXXXXXXXXXXX3": {"name": "Scripts", "own_room": true}
   },
 
-  "single_room": ""
+  "single_room": "",
+
+  "webhook": false,
+  "rules_file": "",
+  "log_file": "",
+  "log_max_entries": 5000
 }
