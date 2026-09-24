@@ -7,6 +7,9 @@
 - **No more `ConnectionResetError` tracebacks in the journal.** A client dropping an idle keep-alive connection (bbctl's
   appservice proxy does it after almost every event - hundreds a week) is routine, and is now logged at DEBUG only.
   Any other error still gets its full traceback.
+- Releases are published automatically: pushing a `v*` tag runs `.github/workflows/release.yml`, which creates the
+  GitHub release from that version's CHANGELOG section (a pre-release for `-beta`/`-rc` versions) and backfills any
+  older tag that has none.
 - README: new section *How a message looks: plain text and HTML* - which field shows where, escaping, `html=1`,
   emoji vs `:shortcodes:` and Markdown.
 

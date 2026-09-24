@@ -1,0 +1,55 @@
+# Publishes a GitHub Release for every version tag, so a version is visible on the Releases page (and to
+# install.sh, which installs the latest release) - not just a bare tag.
+#
+#   git tag -a v1.2.0 -m "..." && git push origin v1.2.0      -> release created automatically
+#   Actions -> Release -> Run workflow                         -> catch up without pushing anything
+#
+# Every run also creates the release for any older v* tag that has none, so a tag can never be left without one.
+# Notes are that version's section of CHANGELOG.md ("## 1.2.0 — date"). The run fails if the tag that triggered it
+# has no section, rather than publishing an empty release; an older tag without one is skipped with a warning.
+# A version with a hyphen (1.1.0-beta.3) is marked as a pre-release - note that GitHub's "latest release" (what
+# install.sh asks for) skips pre-releases. Uses the workflow's own GITHUB_TOKEN; no secrets.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create every missing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRIGGER: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          notes() { awk -v v="$1" 'index($0, "## " v " ") == 1 {f=1; next} /^## / && f {exit} f' CHANGELOG.md; }
+          have=$(gh release list --limit 200 --json tagName --jq '.[].tagName')
+          made=0
+          for tag in $(git tag -l 'v*' --sort=v:refname); do
+            if printf '%s\n' "$have" | grep -qx "$tag"; then
+              continue
+            fi
+            notes "${tag#v}" > notes.md
+            if ! grep -q '[^[:space:]]' notes.md; then
+              if [ "$tag" = "$TRIGGER" ]; then
+                echo "::error::CHANGELOG.md has no section for ${tag#v}"; exit 1
+              fi
+              echo "::warning::skipping $tag - no CHANGELOG.md section for ${tag#v}"; continue
+            fi
+            pre=""
+            case "$tag" in *-*) pre="--prerelease" ;; esac
+            gh release create "$tag" --title "$tag" --notes-file notes.md --verify-tag $pre
+            echo "created release $tag $pre"
+            made=$((made + 1))
+          done
+          echo "$made release(s) created"
