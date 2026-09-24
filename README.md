@@ -1,18 +1,31 @@
 # beeper-api-bridge — a notification API for Beeper
 
-A tiny, dependency-light [Matrix appservice](https://spec.matrix.org/latest/application-service-api/) that gives your
-**Beeper** account an HTTP notification endpoint. It speaks the same API as [Pushover](https://pushover.net/api), so
-anything that can already send Pushover notifications can be pointed at it instead of `api.pushover.net`, and the
-messages arrive in your Beeper chats. It is its own bridge, not a Pushover client: nothing here talks to Pushover.
-It can also accept the incoming-webhook format many tools know from Slack, for senders whose only generic output is
-that; nothing here talks to Slack either.
+> **New in 1.2.0-beta.1 (beta):** apps whose only notification option is **Slack**, such as Prometheus Alertmanager,
+> can now send to Beeper too. Point their Slack webhook URL at the bridge's
+> [Slack-compatible text webhook](#text-webhook-slack-compatible). The release also adds
+> [mute rules and quiet hours](#mute-rules-and-quiet-hours) and a [delivery log](#delivery-log). All three are off
+> until you configure them, so an existing setup behaves exactly as before. This is a pre-release, so the installer
+> doesn't pick it up by default: use `--ref v1.2.0-beta.1` ([Quick install](#quick-install-debian--ubuntu)).
 
-Almost every self-hosted tool has a Pushover integration built in — Grafana, Uptime Kuma, Proxmox VE / Backup Server,
-CrowdSec, Home Assistant, Gotify-style scripts, plain `curl` — so you get chat notifications for all of them without
-writing an adapter for each. No Pushover account, subscription or licence is involved: the tokens are minted by you.
+A tiny, dependency-light [Matrix appservice](https://spec.matrix.org/latest/application-service-api/) that gives your
+**Beeper** account an HTTP notification endpoint for two kinds of sender:
+
+- **Apps that can send Pushover notifications.** The bridge speaks the same API as [Pushover](https://pushover.net/api),
+  so these apps can be pointed at it instead of `api.pushover.net`.
+- **Apps that can only send Slack notifications** *(new, beta)*. The bridge accepts the incoming-webhook format those
+  apps send to Slack, so Prometheus Alertmanager and similar senders need nothing more than a different webhook URL.
+
+Either way, the messages arrive in your Beeper chats. It is its own bridge: nothing here talks to Pushover or to Slack.
+
+Almost every self-hosted tool has a Pushover integration built in: Grafana, Uptime Kuma, Proxmox VE / Backup Server,
+CrowdSec, Home Assistant, Gotify-style scripts and plain `curl`. The ones that don't usually have a Slack one. Either
+way, you get chat notifications from all of them without writing an adapter for each. No Pushover or Slack account,
+subscription or licence is involved: you mint the tokens yourself.
 
 ```
-Grafana / Uptime Kuma / Proxmox / cron …  ──POST /1/messages.json──▶  beeper-api-bridge  ──▶  Beeper (Matrix)
+Grafana / Uptime Kuma / Proxmox / cron …  ──POST /1/messages.json───────────────▶┐
+                                                                                 ├─▶ beeper-api-bridge ──▶ Beeper (Matrix)
+Alertmanager / other Slack-only senders  ──POST /webhook/<token>/<user_key>─────▶┘
 ```
 
 - One chat per application token, each posting as its own ghost user, so a message shows as coming from "Uptime Kuma"
