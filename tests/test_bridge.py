@@ -91,6 +91,17 @@ class BridgeTest(unittest.TestCase):
         self.assertEqual(sends[0][3], "@sh-apibridge_uptime-kuma:example")          # ghost prefix comes from the registration namespace
         self.assertTrue(any(c[1].endswith("/join") and c[3] == "@me:example" for c in self.matrix.calls))  # owner joined
 
+    def test_plain_line_breaks_survive_in_the_html(self):
+        # Clients render formatted_body, and in HTML a newline is only whitespace: a multi-line message used to arrive
+        # as one run-on paragraph. Line breaks become <br/>, the text is still escaped, and the plain body is unchanged.
+        self.matrix.calls.clear()
+        msg = "a <b> line\nsecond line\nthird"
+        status, _ = self.post("/1/messages.json", {"token": TOKEN, "user": USER, "title": "T", "message": msg})
+        self.assertEqual(status, 200)
+        content = [c for c in self.matrix.calls if "/send/" in c[1]][0][2]
+        self.assertIn("a &lt;b&gt; line<br/>second line<br/>third", content["formatted_body"])
+        self.assertTrue(content["body"].endswith(msg))
+
     def test_json_body_and_html_flag(self):
         self.matrix.calls.clear()
         status, body = self.post("/1/messages.json", {"token": TOKEN, "user": USER, "message": "<b>bold</b>", "html": 1}, as_json=True)
@@ -125,6 +136,31 @@ class BridgeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ServerErrorTest(unittest.TestCase):
+    """A client dropping an idle keep-alive connection is routine: no traceback. Anything else keeps its traceback."""
+
+    def _stderr_of(self, exc):
+        import io
+        server = pb._Server.__new__(pb._Server)          # handle_error needs no socket
+        buf, old = io.StringIO(), sys.stderr
+        sys.stderr = buf
+        try:
+            try:
+                raise exc
+            except Exception:
+                server.handle_error(None, ("127.0.0.1", 42978))
+        finally:
+            sys.stderr = old
+        return buf.getvalue()
+
+    def test_client_hang_ups_are_quiet(self):
+        for exc in (ConnectionResetError(104, "Connection reset by peer"), BrokenPipeError(), ConnectionAbortedError()):
+            self.assertEqual(self._stderr_of(exc), "", exc)
+
+    def test_real_errors_still_get_a_traceback(self):
+        self.assertIn("Traceback", self._stderr_of(ValueError("something actually broke")))
 
 
 class PrefixTest(unittest.TestCase):

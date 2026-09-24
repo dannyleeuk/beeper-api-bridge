@@ -34,7 +34,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import yaml
 
-__version__ = "1.1.0-beta.2"
+__version__ = "1.1.0-beta.3"
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.environ.get("BEEPER_API_BRIDGE_CONFIG", os.path.join(BASE, "config.json"))
@@ -240,7 +240,9 @@ class Matrix:
             plain.append(url)
 
         # msg["html"]=1 means the sender supplied HTML
-        body_html = text if msg.get("html") else html.escape(text)
+        # Plain text: escape it and turn its line breaks into <br/>. In HTML a newline is only whitespace, and clients
+        # render formatted_body, so multi-line messages used to arrive as one run-on paragraph.
+        body_html = text if msg.get("html") else html.escape(text).replace("\n", "<br/>")
         parts = [f"<strong>{html.escape(title)}</strong>"]
         if label:
             parts[0] = f"<strong>[{label}] {html.escape(title)}</strong>"
@@ -408,9 +410,23 @@ class _Handler(BaseHTTPRequestHandler):
         self._reply(200, {"status": 1, "request": uuid.uuid4().hex})
 
 
+class _Server(ThreadingHTTPServer):
+    """A client hanging up is routine, not an error. The handler speaks HTTP/1.1, so after answering a request it waits
+    on the kept-alive connection for the next one; bbctl's appservice proxy (and some senders) then drop that idle
+    connection. socketserver's default handle_error prints a full traceback for every such hang-up - hundreds a week,
+    burying any real error in the journal. Those are logged at debug level; anything else still gets the traceback."""
+
+    def handle_error(self, request, client_address):
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError)):
+            log.debug("client %s:%s closed the connection (%s)", *client_address[:2], exc.__class__.__name__)
+            return
+        super().handle_error(request, client_address)
+
+
 def _serve(bind, role, cfg, matrix):
     handler = type(f"{role}Handler", (_Handler,), {"cfg": cfg, "matrix": matrix, "role": role})
-    server = ThreadingHTTPServer(bind, handler)
+    server = _Server(bind, handler)
     server.daemon_threads = True
     log.info("%s listener on http://%s:%d", role, bind[0], bind[1])
     threading.Thread(target=server.serve_forever, daemon=True, name=role).start()

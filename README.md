@@ -223,9 +223,32 @@ user key are the only credentials the API checks, and they travel in clear text 
 - `"own_room": true` on an application keeps its own chat even in single-room mode — for the noisy sender you want to mute.
 - `state.json` remembers token → room. Delete an entry (or the file) to make the bridge create a fresh chat.
 
+## How a message looks: plain text and HTML
+
+Every notification is sent to Matrix twice over, in one event: a plain-text `body` and an HTML `formatted_body`.
+Beeper (like most Matrix clients) **displays the HTML one**; the plain one is the fallback for clients that cannot.
+
+| Field you send | In the chat |
+|---|---|
+| `title` | **bold**, first line |
+| `priority` 1 / 2 | `[HIGH]` / `[EMERGENCY]` in front of the title (-1 and -2 are marked `[low]` / `[lowest]`) |
+| `message` | below the title. **Line breaks are kept** (1.1.0-beta.3+) |
+| `url`, `url_title` | a link on its own line |
+
+- **Plain text is the default.** It is HTML-escaped, so `<`, `>` and `&` show literally and a sender cannot inject
+  markup by accident; each newline becomes a `<br/>`. Before 1.1.0-beta.3 newlines were left as-is, which HTML treats
+  as spaces, so every multi-line message arrived as one run-on paragraph.
+- **`html=1`** (Pushover's flag) passes `message` through as HTML: use `<b>`, `<i>`, `<a href>` and `<br/>` yourself;
+  newlines are not converted. Only send HTML you control.
+- **Emoji**: send real Unicode emoji (🚨 ✅ ⚠️ 🔧). Slack-style `:shortcodes:` are shown literally, and so is Markdown
+  (`*bold*`, backticks) - neither is interpreted.
+- Pushover's other formatting options (`monospace=1`, `sound`, `ttl`…) are accepted and ignored.
+
 ## Operations
 
 - `--check` validates the config and the homeserver login without serving.
+- A client dropping an idle keep-alive connection (bbctl's proxy does this constantly) is logged at DEBUG only, since
+  1.1.0-beta.3; before, each one printed a `ConnectionResetError` traceback to the journal.
 - `BEEPER_API_BRIDGE_LOGLEVEL=DEBUG` logs every request; `BEEPER_API_BRIDGE_CONFIG` points at the config (or use `--config`).
 - `contrib/beeper-api-bridge.service` and `contrib/beeper-api-bridge-proxy.service`: hardened systemd units; the proxy is
   `BindsTo=` the bridge and waits for its `/healthz`, so the pair always comes up in the right order.
