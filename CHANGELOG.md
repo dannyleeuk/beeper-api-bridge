@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.0 — 2026-09-24
+First stable 1.1 release: the 1.1.0 betas below, unchanged. The installer installs this by default.
+
 ## 1.1.0-beta.4 — 2026-09-24
 - Tests run on every push and pull request, on Python 3.9 (the oldest supported) and 3.12.
 - `python3 tests/test_bridge.py` now runs all 12 tests - the `unittest.main()` call sat in the middle of the file, so
