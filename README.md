@@ -256,6 +256,30 @@ Beeper (like most Matrix clients) **displays the HTML one**; the plain one is th
 - Rotate a token by changing it in `config.json` and restarting; the room mapping is keyed by token, so also move the
   entry in `state.json` if you want to keep the same chat.
 
+## Running the tests
+
+`tests/test_bridge.py` starts the bridge's API against a fake Matrix homeserver (built into the test, so no network,
+no Beeper account and no `bbctl` are needed) and checks exactly what would be posted: token and user-key checks, the
+validate endpoint, room creation and the priority label, plain-text escaping and line breaks, `html=1`, the Uptime Kuma
+and Grafana webhook bodies, query-string credentials, and the server's handling of dropped connections.
+
+```sh
+pip install pyyaml                       # or: sudo apt install python3-yaml
+python3 -m unittest discover -s tests    # from the repository root; add -v to list each test
+python3 tests/test_bridge.py             # the same, run directly
+```
+
+GitHub runs them on every push and pull request on Python 3.9 and 3.12 (`.github/workflows/tests.yml`), and the release
+workflow runs them again before it publishes a release - a failing test means no release.
+
+## Releases
+
+Pushing a version tag publishes the release: `.github/workflows/release.yml` takes the notes from that version's section
+of `CHANGELOG.md` (`## 1.2.0 — date`) and marks versions with a hyphen (`-beta.3`) as pre-releases. `install.sh`
+installs the latest *release*; GitHub leaves pre-releases out of that, so until a non-beta release exists it installs
+`main`. To release: bump `__version__`, add the CHANGELOG section, commit, then
+`git tag -a v1.2.0 -m "..." && git push origin v1.2.0`.
+
 ## What it does not do
 
 - No receipt / emergency-retry semantics (`priority=2` is labelled EMERGENCY but not re-sent), no `sound`, `device`,

@@ -134,10 +134,6 @@ class BridgeTest(unittest.TestCase):
         self.assertEqual(body["errors"], ["message cannot be blank"])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ServerErrorTest(unittest.TestCase):
     """A client dropping an idle keep-alive connection is routine: no traceback. Anything else keeps its traceback."""
 
@@ -168,3 +164,7 @@ class PrefixTest(unittest.TestCase):
         self.assertEqual(pb._prefix_from_registration({"namespaces": {"users": [{"regex": "@sh-apibridge_.+:beeper\\.local"}]}}), "sh-apibridge")
         self.assertEqual(pb._prefix_from_registration({"namespaces": {"users": [{"regex": "@sh-notify_.+:beeper\\.local"}]}}), "sh-notify")
         self.assertEqual(pb._prefix_from_registration({}), "")
+
+
+if __name__ == "__main__":
+    unittest.main()

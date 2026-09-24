@@ -1,0 +1,28 @@
+# Runs the test suite (tests/test_bridge.py: the API against a fake Matrix homeserver, no network) on every push and
+# pull request, on the oldest Python the README promises and a current one. release.yml runs the same tests before it
+# publishes anything.
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install pyyaml
+      - run: python -m unittest discover -s tests -v

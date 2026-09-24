@@ -8,7 +8,8 @@
 # Notes are that version's section of CHANGELOG.md ("## 1.2.0 — date"). The run fails if the tag that triggered it
 # has no section, rather than publishing an empty release; an older tag without one is skipped with a warning.
 # A version with a hyphen (1.1.0-beta.3) is marked as a pre-release - note that GitHub's "latest release" (what
-# install.sh asks for) skips pre-releases. Uses the workflow's own GITHUB_TOKEN; no secrets.
+# install.sh asks for) skips pre-releases. The test suite runs first: a failing test means nothing is published.
+# Uses the workflow's own GITHUB_TOKEN; no secrets.
 name: Release
 
 on:
@@ -26,6 +27,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tests must pass before anything is published
+        run: |
+          pip install pyyaml
+          python -m unittest discover -s tests -v
 
       - name: Create every missing release
         env:

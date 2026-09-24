@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0-beta.4 — 2026-09-24
+- Tests run on GitHub on every push and pull request, on Python 3.9 (the oldest supported) and 3.12
+  (`.github/workflows/tests.yml`); the release workflow runs them again and publishes nothing if one fails.
+- `python3 tests/test_bridge.py` now runs all 12 tests - the `unittest.main()` call sat in the middle of the file, so
+  running it directly silently skipped the last two groups. `python3 -m unittest discover -s tests` was unaffected.
+- README: *Running the tests* and *Releases* sections. No change to the bridge itself.
+
 ## 1.1.0-beta.3 — 2026-09-24
 - **Line breaks in plain-text messages are kept.** The HTML body (what Beeper and other clients display) left newlines as
   newlines, which HTML treats as spaces, so every multi-line message arrived as one run-on paragraph. They now become
