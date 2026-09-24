@@ -269,16 +269,7 @@ python3 -m unittest discover -s tests    # from the repository root; add -v to l
 python3 tests/test_bridge.py             # the same, run directly
 ```
 
-GitHub runs them on every push and pull request on Python 3.9 and 3.12 (`.github/workflows/tests.yml`), and the release
-workflow runs them again before it publishes a release - a failing test means no release.
-
-## Releases
-
-Pushing a version tag publishes the release: `.github/workflows/release.yml` takes the notes from that version's section
-of `CHANGELOG.md` (`## 1.2.0 — date`) and marks versions with a hyphen (`-beta.3`) as pre-releases. `install.sh`
-installs the latest *release*; GitHub leaves pre-releases out of that, so until a non-beta release exists it installs
-`main`. To release: bump `__version__`, add the CHANGELOG section, commit, then
-`git tag -a v1.2.0 -m "..." && git push origin v1.2.0`.
+They also run on every push and pull request, on Python 3.9 and 3.12.
 
 ## What it does not do
 
